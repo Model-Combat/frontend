@@ -242,6 +242,7 @@ const vulnerabilities: Vulnerability[] = [
 
 const fighterAnimations: Partial<Record<string, string>> = {
   liukang: "/mk-assets/sprites/liukang-stance.gif",
+  raiden: "/mk-assets/sprites/raiden-stance.gif",
   scorpion: "/mk-assets/sprites/scorpion-stance.gif",
   subzero: "/mk-assets/sprites/subzero-stance.gif",
 };
@@ -343,6 +344,7 @@ export default function Home() {
           onStart={() => setMode("pool")}
           onOpenPool={() => setMode("pool")}
           onOpenBenchmark={() => setMode("benchmark")}
+          onOpenArena={() => setMode("arena")}
         />
       )}
       {mode === "pool" && <VulnerabilityPoolScreen onNext={() => setMode("lobby")} />}
@@ -377,10 +379,12 @@ function TitleScreen({
   onStart,
   onOpenPool,
   onOpenBenchmark,
+  onOpenArena,
 }: {
   onStart: () => void;
   onOpenPool: () => void;
   onOpenBenchmark: () => void;
+  onOpenArena: () => void;
 }) {
   return (
     <section className="screen title-screen">
@@ -388,6 +392,12 @@ function TitleScreen({
         <div className="title-copy">
           <h1>MODEL COMBAT</h1>
           <img className="title-emblem" src="/logo.png" alt="Model Combat serpent emblem" />
+          <div className="title-oneliner">
+            <p>A benchmark for AI agents on real vulnerability tasks.</p>
+            <button className="live-badge" onClick={onOpenArena} type="button" aria-label="Live round preview">
+              <i />Live Round <strong>GPT-4.5 vs Claude Opus 4.6</strong>
+            </button>
+          </div>
           <button className="press-start" onClick={onStart} type="button">
             Press Start
           </button>
@@ -602,7 +612,8 @@ function LobbyScreen({
 }
 
 function ArenaScreen({ fighters, onNext }: { fighters: Fighter[]; onNext: () => void }) {
-  const [eventIndex, setEventIndex] = useState(1);
+  const [introPhase, setIntroPhase] = useState<"round" | "fight" | null>("round");
+  const [eventIndex, setEventIndex] = useState(0);
   const [showRoundStats, setShowRoundStats] = useState(false);
   const playedEventRef = useRef<string | null>(null);
   const playedRoundEndRef = useRef(false);
@@ -614,20 +625,36 @@ function ArenaScreen({ fighters, onNext }: { fighters: Fighter[]; onNext: () => 
   const health = calculateHealth(duelists, visibleEvents);
   const roundStats = getRoundStats(duelists, visibleEvents, health);
   const latestEvent = visibleEvents[visibleEvents.length - 1];
-  const roundComplete = eventIndex >= baseMatchEvents.length;
-  const callout = getFightCallout(latestEvent, roundComplete, roundStats.hasKo);
+  const roundComplete = eventIndex >= baseMatchEvents.length && eventIndex > 0;
+  const callout = introPhase ? null : getFightCallout(latestEvent, roundComplete, roundStats.hasKo);
 
   useEffect(() => {
-    setEventIndex(1);
+    setIntroPhase("round");
+    setEventIndex(0);
     setShowRoundStats(false);
     playedEventRef.current = null;
     playedRoundEndRef.current = false;
+
+    const t1 = window.setTimeout(() => setIntroPhase("fight"), 1600);
+    const t2 = window.setTimeout(() => {
+      setIntroPhase(null);
+      setEventIndex(1);
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [leftFighter.id, rightFighter.id]);
+
+  useEffect(() => {
+    if (introPhase !== null) return;
     const timer = window.setInterval(() => {
       setEventIndex((current) => Math.min(current + 1, baseMatchEvents.length));
     }, 2600);
 
     return () => window.clearInterval(timer);
-  }, [leftFighter.id, rightFighter.id]);
+  }, [introPhase, leftFighter.id, rightFighter.id]);
 
   useEffect(() => {
     if (!roundComplete) return;
@@ -666,9 +693,16 @@ function ArenaScreen({ fighters, onNext }: { fighters: Fighter[]; onNext: () => 
         <img className="arena-art" src="/mk-assets/arena/the-temple.png" alt="" />
         <div className="stage-haze" />
         <img className="versus-stinger" src="/mk-assets/arena/versus-stinger.gif" alt="" />
-        <div className="fight-callout" data-tone={roundStats.hasKo ? "ko" : latestEvent?.kind}>
-          {callout}
-        </div>
+        {introPhase && (
+          <div className="round-intro" data-phase={introPhase} key={introPhase}>
+            {introPhase === "round" ? "Round 1" : "Fight!"}
+          </div>
+        )}
+        {!introPhase && (
+          <div className="fight-callout" data-tone={roundStats.hasKo ? "ko" : latestEvent?.kind}>
+            {callout}
+          </div>
+        )}
         <StageFighter fighter={leftFighter} side="left" />
         <StageFighter fighter={rightFighter} side="right" />
         <div className="arena-shadow" />
@@ -785,11 +819,12 @@ function getRoundStats(duelists: Fighter[], events: MatchEvent[], health: Record
 }
 
 function StageFighter({ fighter, side }: { fighter: Fighter; side: "left" | "right" }) {
+  const hasSprite = Boolean(fighterAnimations[fighter.id]);
   const sprite = fighterAnimations[fighter.id] ?? fighter.portrait;
 
   return (
     <div className={`stage-fighter stage-fighter-${side}`} style={{ "--fighter": fighter.palette } as CSSProperties}>
-      <img src={sprite} alt="" />
+      <img className={hasSprite ? "" : "portrait-fallback"} src={sprite} alt="" />
       <span>{fighter.model}</span>
       <strong>{fighter.name}</strong>
     </div>
