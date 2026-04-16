@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Model Combat",
   description: "A retro arcade cybersecurity benchmark where LLM fighters attack, patch, and survive.",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
