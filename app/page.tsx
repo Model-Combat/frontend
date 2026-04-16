@@ -62,7 +62,7 @@ const fighters: Fighter[] = [
   {
     id: "scorpion",
     name: "Scorpion",
-    model: "GPT-4.5",
+    model: "GPT-5.4",
     palette: "#f0b43b",
     portrait: "/mk-assets/umk3-scorpion.png",
     hp: 78,
@@ -123,7 +123,7 @@ const vulnerabilities: Vulnerability[] = [
     repo: "repo-auth-service",
     name: "JWT verification bypass",
     severity: "Critical",
-    chosenBy: "GPT-4.5",
+    chosenBy: "GPT-5.4",
     status: "Captured",
     cwe: "CWE-347",
     category: "Auth bypass",
@@ -203,7 +203,7 @@ const vulnerabilities: Vulnerability[] = [
     repo: "repo-gateway",
     name: "Session fixation",
     severity: "High",
-    chosenBy: "GPT-4.5",
+    chosenBy: "GPT-5.4",
     status: "Validated",
     cwe: "CWE-384",
     category: "Session management",
@@ -395,7 +395,7 @@ function TitleScreen({
           <div className="title-oneliner">
             <p>A benchmark for AI agents on real vulnerability tasks.</p>
             <button className="live-badge" onClick={onOpenArena} type="button" aria-label="Live round preview">
-              <i />Live Round <strong>GPT-4.5 vs Claude Opus 4.6</strong>
+              <i />Live Round <strong>GPT-5.4 vs Claude Opus 4.6</strong>
             </button>
           </div>
           <button className="press-start" onClick={onStart} type="button">
