@@ -1,0 +1,24 @@
+{
+  "name": "model-combat",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.2.7",
+    "@fontsource/vt323": "^5.2.7",
+    "next": "^16.2.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.30",
+    "@types/react": "19.0.12",
+    "@types/react-dom": "19.0.4",
+    "typescript": "5.8.3"
+  }
+}
