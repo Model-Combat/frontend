@@ -1515,6 +1515,404 @@ button {
   flex-shrink: 0;
 }
 
+/* ── Unified live round screen ───────────────────────────────── */
+
+/* ── Countdown overlay ────────────────────────────────────────── */
+
+.countdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.82);
+  pointer-events: none;
+}
+
+.countdown-text {
+  font-family: var(--font-title);
+  font-size: clamp(6rem, 18vw, 14rem);
+  color: var(--accent);
+  text-transform: uppercase;
+  text-shadow:
+    5px 5px 0 #050505,
+    0 0 40px rgba(214, 177, 90, 0.7),
+    0 0 80px rgba(214, 177, 90, 0.3);
+  animation: introSlam 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.countdown-fight {
+  color: var(--red-hot) !important;
+  text-shadow:
+    5px 5px 0 #050505,
+    0 0 40px rgba(255, 48, 58, 0.8),
+    0 0 80px rgba(255, 48, 58, 0.4) !important;
+}
+
+@keyframes countdownPop {
+  0% {
+    opacity: 0;
+    transform: scale(2.4);
+    filter: blur(6px);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.unified-live-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  max-height: 100svh;
+  overflow: hidden;
+  padding: 68px 28px 16px;
+  gap: 0;
+}
+
+.unified-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.unified-fighter-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+  flex: 1;
+  max-width: 340px;
+}
+
+.unified-fighter-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--fighter, var(--line));
+}
+
+.unified-fighter-card .portrait {
+  width: 42px;
+  height: 42px;
+  border-width: 2px;
+  flex-shrink: 0;
+}
+
+.unified-fighter-info strong {
+  display: block;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  text-transform: uppercase;
+}
+
+.unified-fighter-info small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.fighter-ip {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+}
+
+.unified-score {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--fighter, var(--accent));
+}
+
+.unified-center-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.unified-round-label {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.unified-wave-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unified-wave-timer span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.unified-wave-timer strong {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--accent);
+}
+
+.unified-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding-top: 10px;
+}
+
+.unified-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.unified-view-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.unified-view-tabs button {
+  min-height: 34px;
+  padding: 0 16px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.unified-view-tabs button:hover,
+.unified-view-tabs button.active {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.unified-stage {
+  flex: 1;
+  min-height: 0;
+  border-top: 0;
+}
+
+.unified-leaderboard {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.unified-leaderboard .wave-status-strip {
+  flex-shrink: 0;
+}
+
+.unified-trace-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 16px;
+}
+
+.unified-trace-sidebar .terminal-header {
+  flex-shrink: 0;
+  padding: 8px 0;
+  min-height: 40px;
+}
+
+.unified-trace-lines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+}
+
+.unified-trace-lines .trace-entry {
+  grid-template-columns: 56px auto minmax(0, 1fr);
+  gap: 6px;
+}
+
+.trace-agent {
+  font-size: 0.72rem;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* ── Vulnerable services panel ────────────────────────────────── */
+
+.vuln-services-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vuln-author-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+}
+
+.vuln-author-bar .portrait {
+  width: 42px;
+  height: 42px;
+  border-width: 2px;
+  flex-shrink: 0;
+}
+
+.vuln-author-label {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.vuln-author-bar strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+
+.vuln-author-bar small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.vuln-count {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.vuln-table {
+  border-top: 2px solid var(--accent);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.vuln-table-head,
+.vuln-table-row {
+  display: grid;
+  grid-template-columns: 40px minmax(120px, 0.7fr) minmax(180px, 1.4fr) 80px 72px 72px;
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.vuln-table-head {
+  color: var(--muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.vuln-table-row {
+  color: var(--muted);
+  border-bottom: 1px solid rgba(244, 241, 232, 0.08);
+  font-size: 0.88rem;
+}
+
+.vuln-table-row b {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+}
+
+.vuln-name {
+  color: var(--ink);
+}
+
+.vuln-table-row em {
+  font-style: normal;
+}
+
+.vuln-table-row em[data-severity="Critical"] { color: var(--red-hot); }
+.vuln-table-row em[data-severity="High"] { color: var(--yellow); }
+.vuln-table-row em[data-severity="Medium"] { color: var(--cyan); }
+.vuln-table-row em[data-severity="Low"] { color: var(--green); }
+
+.vuln-agent-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.vuln-agent-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+
+.vuln-agent-col small {
+  font-size: 0.55rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.1;
+}
+
+.vuln-status {
+  text-align: center;
+  font-size: 1rem;
+}
+
+.vuln-exploited { color: var(--red-hot); }
+.vuln-patched { color: var(--green); }
+.vuln-none { color: var(--dim); }
+
 .score-fighter-btn {
   background: transparent;
   border: 1px solid transparent;
@@ -2130,6 +2528,30 @@ button.past-rounds-row:disabled {
   .lobby-slab {
     grid-template-columns: 1fr;
     padding: 18px;
+  }
+
+  .unified-body {
+    grid-template-columns: 1fr;
+  }
+
+  .unified-trace-sidebar {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-left: 0;
+    padding-top: 10px;
+    max-height: 260px;
+  }
+
+  .unified-hud {
+    flex-wrap: wrap;
+  }
+
+  .unified-center-info {
+    order: -1;
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
   }
 
   .live-round-screen {

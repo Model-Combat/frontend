@@ -54,7 +54,7 @@ const modes: { id: Mode; label: string; hidden?: boolean }[] = [
   { id: "title", label: "Title" },
   { id: "pool", label: "Vulnerability Pool", hidden: true },
   { id: "lobby", label: "Lobby" },
-  { id: "arena", label: "Arena" },
+  { id: "arena", label: "Arena", hidden: true },
   { id: "results", label: "Live Round" },
   { id: "history", label: "Past Rounds" },
   { id: "benchmark", label: "Global Leaderboard" },
@@ -88,7 +88,7 @@ const fighters: Fighter[] = [
   {
     id: "raiden",
     name: "Raiden",
-    model: "Gemini 2.0",
+    model: "Gemini 3.1",
     palette: "#f6f0a5",
     portrait: "/mk-assets/raiden.png",
     hp: 64,
@@ -145,7 +145,7 @@ const vulnerabilities: Vulnerability[] = [
     repo: "repo-payment-api",
     name: "SSRF metadata access",
     severity: "High",
-    chosenBy: "Gemini 2.0",
+    chosenBy: "Gemini 3.1",
     status: "Patched",
     cwe: "CWE-918",
     category: "SSRF",
@@ -306,6 +306,11 @@ const baseMatchEvents: MatchEvent[] = [
 
 const liveRound = allRounds.find((r) => r.status === "live")!;
 
+const ROUND_DURATION = 60 * 60;
+const SPEED_MULTIPLIER = 20;
+// Stable start time — set once on page load, persists across tab switches.
+let liveRoundStartTime: number | null = null;
+
 function getHashMode(): Mode {
   if (typeof window === "undefined") return "title";
   const hashMode = window.location.hash.replace("#", "");
@@ -314,7 +319,7 @@ function getHashMode(): Mode {
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("title");
-  const [selected, setSelected] = useState<string[]>(["scorpion", "subzero", "raiden", "liukang"]);
+  const [selected, setSelected] = useState<string[]>(["scorpion", "subzero"]);
 
   useEffect(() => {
     const syncHashMode = () => setMode(getHashMode());
@@ -333,8 +338,9 @@ export default function Home() {
   const toggleFighter = (id: string) => {
     setSelected((current) => {
       if (current.includes(id)) {
-        return current.length > 2 ? current.filter((item) => item !== id) : current;
+        return current.filter((item) => item !== id);
       }
+      if (current.length >= 2) return current;
       return [...current, id];
     });
   };
@@ -345,7 +351,7 @@ export default function Home() {
       {mode !== "title" && <ModeRail mode={mode} setMode={setMode} />}
       {mode === "title" && (
         <TitleScreen
-          onStart={() => setMode("pool")}
+          onStart={() => setMode("lobby")}
           onOpenPool={() => setMode("pool")}
           onOpenBenchmark={() => setMode("benchmark")}
           onOpenArena={() => setMode("results")}
@@ -353,7 +359,7 @@ export default function Home() {
       )}
       {mode === "pool" && <VulnerabilityPoolScreen onNext={() => setMode("lobby")} />}
       {mode === "lobby" && (
-        <LobbyScreen selected={selected} toggleFighter={toggleFighter} onNext={() => setMode("arena")} />
+        <LobbyScreen selected={selected} toggleFighter={toggleFighter} onNext={() => setMode("results")} />
       )}
       {mode === "arena" && <ArenaScreen fighters={activeFighters} onNext={() => setMode("results")} />}
       {mode === "results" && <LiveRoundScreen onNext={() => setMode("history")} />}
@@ -398,13 +404,13 @@ function TitleScreen({
           <h1>MODEL COMBAT</h1>
           <img className="title-emblem" src="/logo.png" alt="Model Combat serpent emblem" />
           <div className="title-oneliner">
-            <p>A benchmark for AI agents on real vulnerability tasks.</p>
+            <p>AI agents compete head-to-head in an attack-defence CTF.</p>
             <button className="live-badge" onClick={onOpenArena} type="button" aria-label="Live round preview">
               <i />Live Round <strong>GPT-5.4 vs Claude Opus 4.6</strong>
             </button>
           </div>
-          <button className="press-start" onClick={onOpenArena} type="button">
-            View Live Round
+          <button className="press-start" onClick={onStart} type="button">
+            Start
           </button>
         </div>
       </div>
@@ -597,18 +603,18 @@ function LobbyScreen({
       </div>
       <div className="lobby-slab">
         <div>
-          <span>Selected roster</span>
-          <strong>{selected.length} fighters</strong>
+          <span>Matchup</span>
+          <strong>{selected.length}/2 selected</strong>
         </div>
         <div>
           <span>Round format</span>
-          <strong>3 rounds / 4 waves</strong>
+          <strong>1v1 / 12 waves</strong>
         </div>
         <div>
           <span>Vulnerability pool</span>
           <strong>42 sealed vulns</strong>
         </div>
-        <button onClick={onNext} type="button">
+        <button onClick={onNext} type="button" disabled={selected.length !== 2}>
           Enter Arena
         </button>
       </div>
@@ -840,24 +846,69 @@ function LiveRoundScreen({ onNext }: { onNext: () => void }) {
   const round = liveRound;
   const leftFighter = fighters.find((f) => f.id === round.leftId)!;
   const rightFighter = fighters.find((f) => f.id === round.rightId)!;
+  const duelists = [leftFighter, rightFighter];
 
   const totalWaves = 12;
-  const roundDuration = 60 * 60;
+  const roundDuration = ROUND_DURATION;
   const waveDuration = 5 * 60;
-  const speedMultiplier = 25;
 
-  const [elapsed, setElapsed] = useState(0);
+  // Initialize start time once (persists across remounts within session)
+  if (liveRoundStartTime === null) liveRoundStartTime = Date.now();
+
+  const getElapsed = () => Math.min(Math.floor(((Date.now() - liveRoundStartTime!) / 1000) * SPEED_MULTIPLIER), roundDuration);
+  const [elapsed, setElapsed] = useState(getElapsed);
   const [selectedAgent, setSelectedAgent] = useState<"left" | "right" | null>(null);
+  const [bottomView, setBottomView] = useState<"arena" | "leaderboard" | "vulns">("arena");
 
+  // Countdown intro: 3, 2, 1, Fight!
+  const [countdown, setCountdown] = useState<number | "fight" | null>(3);
+  const [eventIndex, setEventIndex] = useState(0);
+  const playedEventRef = useRef<string | null>(null);
+  const traceEndRef = useRef<HTMLDivElement>(null);
+
+  const visibleMatchEvents = baseMatchEvents.slice(0, eventIndex);
+  const health = calculateHealth(duelists, visibleMatchEvents);
+  const roundStats = getRoundStats(duelists, visibleMatchEvents, health);
+  const latestEvent = visibleMatchEvents[visibleMatchEvents.length - 1];
+  const roundComplete = eventIndex >= baseMatchEvents.length && eventIndex > 0;
+  const callout = countdown !== null ? null : getFightCallout(latestEvent, roundComplete, roundStats.hasKo);
+
+  // Sped-up clock
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setElapsed((e) => {
-        const next = e + speedMultiplier;
-        return next >= roundDuration ? roundDuration : next;
-      });
+      setElapsed(getElapsed());
     }, 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Countdown: 3 → 2 → 1 → Fight! → start
+  useEffect(() => {
+    if (countdown === null) return;
+    if (typeof countdown === "number" && countdown > 1) {
+      const t = window.setTimeout(() => setCountdown(countdown - 1), 800);
+      return () => window.clearTimeout(t);
+    }
+    if (countdown === 1) {
+      const t = window.setTimeout(() => setCountdown("fight"), 800);
+      return () => window.clearTimeout(t);
+    }
+    if (countdown === "fight") {
+      const t = window.setTimeout(() => {
+        setCountdown(null);
+        setEventIndex(1);
+      }, 1000);
+      return () => window.clearTimeout(t);
+    }
+  }, [countdown]);
+
+  // Arena event playback after countdown
+  useEffect(() => {
+    if (countdown !== null) return;
+    const timer = window.setInterval(() => {
+      setEventIndex((c) => Math.min(c + 1, baseMatchEvents.length));
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, [countdown]);
 
   const currentWave = Math.min(Math.floor(elapsed / waveDuration) + 1, totalWaves);
   const waveRemaining = Math.max(0, waveDuration - (elapsed % waveDuration));
@@ -870,6 +921,24 @@ function LiveRoundScreen({ onNext }: { onNext: () => void }) {
 
   const scores = computeScores(round.waves, currentWave);
 
+  // Merged trace from both agents, interleaved by timestamp
+  const simMinutes = Math.floor(elapsed / 60);
+  const mergedTrace = useMemo(() => {
+    const left = round.leftTrace.map((e) => ({ ...e, agent: leftFighter.name, palette: leftFighter.palette }));
+    const right = round.rightTrace.map((e) => ({ ...e, agent: rightFighter.name, palette: rightFighter.palette }));
+    return [...left, ...right]
+      .filter((entry) => {
+        const [hh, mm] = entry.ts.split(":").map(Number);
+        return hh * 60 + mm <= simMinutes;
+      })
+      .sort((a, b) => a.ts.localeCompare(b.ts));
+  }, [simMinutes, round.leftTrace, round.rightTrace, leftFighter.name, leftFighter.palette, rightFighter.name, rightFighter.palette]);
+
+  useEffect(() => {
+    traceEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [mergedTrace.length]);
+
+  // Leaderboard graph helpers
   const maxScore = Math.max(...scores.left, ...scores.right, 1);
   const padded = maxScore * 1.15;
   const gH = 300;
@@ -880,21 +949,16 @@ function LiveRoundScreen({ onNext }: { onNext: () => void }) {
   const padB = 32;
   const plotW = gW - padL - padR;
   const plotH = gH - padT - padB;
-
   const toX = (wave: number) => padL + (wave / totalWaves) * plotW;
   const toY = (score: number) => padT + plotH - (score / padded) * plotH;
-
   const buildPath = (pts: number[]) => {
     if (pts.length === 0) return "";
     return pts.map((s, i) => `${i === 0 ? "M" : "L"}${toX(i + 1).toFixed(1)},${toY(s).toFixed(1)}`).join(" ");
   };
-
   const leftPath = buildPath(scores.left);
   const rightPath = buildPath(scores.right);
-
   const leftTip = currentWave > 0 ? { x: toX(currentWave), y: toY(scores.left[currentWave - 1]) } : null;
   const rightTip = currentWave > 0 ? { x: toX(currentWave), y: toY(scores.right[currentWave - 1]) } : null;
-
   const yTicks = 5;
   const tickStep = Math.ceil(padded / yTicks / 50) * 50 || 50;
 
@@ -919,133 +983,199 @@ function LiveRoundScreen({ onNext }: { onNext: () => void }) {
   }
 
   return (
-    <section className="screen live-round-screen">
-      <div className="live-round-topbar">
-        <div className="live-round-left">
-          <div className="live-round-badge">
-            <i />
-            <span>Live</span>
-          </div>
-          <h2>
-            Round #{round.id}: <span style={{ color: leftFighter.palette }}>{leftFighter.model}</span>
-            {" vs "}
-            <span style={{ color: rightFighter.palette }}>{rightFighter.model}</span>
-          </h2>
-        </div>
-        <div className="live-round-wave-timer">
-          <span>Wave {currentWave}/{totalWaves}</span>
-          <strong>{formatTime(waveRemaining)}</strong>
-        </div>
-      </div>
-
-      <div className="live-round-scoreboard">
-        <button className="score-fighter score-fighter-btn" style={{ "--fighter": leftFighter.palette } as CSSProperties} onClick={() => setSelectedAgent("left")} type="button">
+    <section className="screen unified-live-screen">
+      {/* ── HUD: scores + view trace ────────────────────────────── */}
+      <div className="unified-hud">
+        <button className="unified-fighter-card" style={{ "--fighter": leftFighter.palette } as CSSProperties} onClick={() => setSelectedAgent("left")} type="button">
           <PixelPortrait fighter={leftFighter} />
-          <div>
+          <div className="unified-fighter-info">
             <strong>{leftFighter.name}</strong>
             <small>{leftFighter.model}</small>
+            <code className="fighter-ip">{round.leftIp}</code>
           </div>
-          <b>{scores.left[currentWave - 1] ?? 0}</b>
+          <b className="unified-score">{scores.left[currentWave - 1] ?? 0}</b>
           <span className="view-trace-link">View Trace</span>
         </button>
-        <button className="score-fighter score-fighter-btn" style={{ "--fighter": rightFighter.palette } as CSSProperties} onClick={() => setSelectedAgent("right")} type="button">
+
+        <div className="unified-center-info">
+          <div className="live-round-badge"><i /><span>Live</span></div>
+          <span className="unified-round-label">Round #{round.id}</span>
+          <div className="unified-wave-timer">
+            <span>Wave {currentWave}/{totalWaves}</span>
+            <strong>{formatTime(waveRemaining)}</strong>
+          </div>
+        </div>
+
+        <button className="unified-fighter-card" style={{ "--fighter": rightFighter.palette } as CSSProperties} onClick={() => setSelectedAgent("right")} type="button">
           <PixelPortrait fighter={rightFighter} />
-          <div>
+          <div className="unified-fighter-info">
             <strong>{rightFighter.name}</strong>
             <small>{rightFighter.model}</small>
+            <code className="fighter-ip">{round.rightIp}</code>
           </div>
-          <b>{scores.right[currentWave - 1] ?? 0}</b>
+          <b className="unified-score">{scores.right[currentWave - 1] ?? 0}</b>
           <span className="view-trace-link">View Trace</span>
         </button>
       </div>
 
-      <div className="wave-status-strip">
-        {round.waves.slice(0, currentWave).map((w, i) => (
-          <div className="wave-status-col" key={i}>
-            <span className="wave-label">W{i + 1}</span>
-            <div className="wave-status-pair">
-              <span className={`svc-dot ${w.left.serviceUp ? "up" : "down"}`} title={`${leftFighter.name}: ${w.left.serviceUp ? "Up" : "Down"}`} />
-              <span className={`svc-dot ${w.right.serviceUp ? "up" : "down"}`} title={`${rightFighter.name}: ${w.right.serviceUp ? "Up" : "Down"}`} />
+      {/* ── Main content: left = arena/leaderboard, right = trace ── */}
+      <div className="unified-body">
+        <div className="unified-main">
+          <div className="unified-view-tabs">
+            <button className={bottomView === "arena" ? "active" : ""} onClick={() => setBottomView("arena")} type="button">Arena</button>
+            <button className={bottomView === "leaderboard" ? "active" : ""} onClick={() => setBottomView("leaderboard")} type="button">Leaderboard</button>
+            <button className={bottomView === "vulns" ? "active" : ""} onClick={() => setBottomView("vulns")} type="button">Vulnerable Services</button>
+          </div>
+
+          {bottomView === "arena" && (
+            <div className="stage unified-stage">
+              <img className="arena-art" src="/mk-assets/arena/the-temple.png" alt="" />
+              <div className="stage-haze" />
+              <img className="versus-stinger" src="/mk-assets/arena/versus-stinger.gif" alt="" />
+              {countdown !== null && (
+                <div className="round-intro" data-phase={countdown === "fight" ? "fight" : "round"} key={String(countdown)}>
+                  {countdown === "fight" ? "Fight!" : countdown}
+                </div>
+              )}
+              {countdown === null && (
+                <div className="fight-callout" data-tone={roundStats.hasKo ? "ko" : latestEvent?.kind}>
+                  {callout}
+                </div>
+              )}
+              <StageFighter fighter={leftFighter} side="left" />
+              <StageFighter fighter={rightFighter} side="right" />
+              <div className="arena-shadow" />
             </div>
-            <div className="wave-flags">
-              <span style={{ color: leftFighter.palette }} title={`${leftFighter.name}: +${w.left.flagsStolen} / -${w.left.flagsLost}`}>
-                +{w.left.flagsStolen} -{w.left.flagsLost}
-              </span>
-              <span style={{ color: rightFighter.palette }} title={`${rightFighter.name}: +${w.right.flagsStolen} / -${w.right.flagsLost}`}>
-                +{w.right.flagsStolen} -{w.right.flagsLost}
-              </span>
+          )}
+
+          {bottomView === "leaderboard" && (
+            <div className="unified-leaderboard">
+              <div className="wave-status-strip">
+                {round.waves.slice(0, currentWave).map((w, i) => (
+                  <div className="wave-status-col" key={i}>
+                    <span className="wave-label">W{i + 1}</span>
+                    <div className="wave-status-pair">
+                      <span className={`svc-dot ${w.left.serviceUp ? "up" : "down"}`} />
+                      <span className={`svc-dot ${w.right.serviceUp ? "up" : "down"}`} />
+                    </div>
+                    <div className="wave-flags">
+                      <span style={{ color: leftFighter.palette }}>+{w.left.flagsStolen} -{w.left.flagsLost}</span>
+                      <span style={{ color: rightFighter.palette }}>+{w.right.flagsStolen} -{w.right.flagsLost}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="live-graph-container" style={{ flex: 1, minHeight: 0 }}>
+                <svg className="live-graph" viewBox={`0 0 ${gW} ${gH}`}>
+                  {Array.from({ length: Math.floor(padded / tickStep) + 1 }, (_, i) => {
+                    const val = i * tickStep;
+                    const y = toY(val);
+                    if (y < padT) return null;
+                    return (
+                      <g key={`yt-${i}`}>
+                        <line x1={padL} y1={y} x2={padL + plotW} y2={y} stroke="rgba(244,241,232,0.06)" strokeWidth={0.5} />
+                        <text x={padL - 8} y={y + 4} fill="#9a9185" fontSize="11" textAnchor="end" fontFamily="VT323, monospace">{val}</text>
+                      </g>
+                    );
+                  })}
+                  {Array.from({ length: totalWaves }, (_, i) => {
+                    const x = toX(i + 1);
+                    const isFuture = i + 1 > currentWave;
+                    return (
+                      <g key={i}>
+                        <line x1={x} y1={padT} x2={x} y2={padT + plotH} stroke={isFuture ? "rgba(244,241,232,0.04)" : "rgba(244,241,232,0.1)"} strokeWidth={0.5} strokeDasharray={isFuture ? "4 3" : "0"} />
+                        <text x={x} y={gH - 6} fill={isFuture ? "#5d564f" : "#9a9185"} fontSize="11" textAnchor="middle" fontFamily="VT323, monospace">W{i + 1}</text>
+                      </g>
+                    );
+                  })}
+                  <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke="rgba(244,241,232,0.12)" strokeWidth={0.5} />
+                  <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(244,241,232,0.12)" strokeWidth={0.5} />
+                  {leftPath && <path d={leftPath} fill="none" stroke={leftFighter.palette} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
+                  {rightPath && <path d={rightPath} fill="none" stroke={rightFighter.palette} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
+                  {leftTip && (<><circle cx={leftTip.x} cy={leftTip.y} r={6} fill={leftFighter.palette} opacity={0.25} /><circle cx={leftTip.x} cy={leftTip.y} r={4} fill={leftFighter.palette} /></>)}
+                  {rightTip && (<><circle cx={rightTip.x} cy={rightTip.y} r={6} fill={rightFighter.palette} opacity={0.25} /><circle cx={rightTip.x} cy={rightTip.y} r={4} fill={rightFighter.palette} /></>)}
+                </svg>
+                <div className="graph-legend">
+                  <span style={{ color: leftFighter.palette }}>&#9632; {leftFighter.name}</span>
+                  <span style={{ color: rightFighter.palette }}>&#9632; {rightFighter.name}</span>
+                </div>
+              </div>
             </div>
+          )}
+
+          {bottomView === "vulns" && (
+            <VulnServicesPanel round={round} />
+          )}
+        </div>
+
+        {/* ── Live merged trace sidebar ──────────────────────────── */}
+        <aside className="unified-trace-sidebar">
+          <div className="terminal-header">
+            <span>Live Trace</span>
+            <strong>{mergedTrace.length}</strong>
+          </div>
+          <div className="unified-trace-lines">
+            {mergedTrace.map((entry, i) => (
+              <div className="trace-entry" key={i} data-type={entry.type}>
+                <span className="trace-ts">{entry.ts}</span>
+                <span className="trace-agent" style={{ color: entry.palette }}>{entry.agent.toLowerCase()}$</span>
+                <pre className="trace-content">{entry.content}</pre>
+              </div>
+            ))}
+            <div ref={traceEndRef} />
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function VulnServicesPanel({ round }: { round: RoundData }) {
+  const author = fighters.find((f) => f.id === round.vulnAuthorId);
+  const left = fighters.find((f) => f.id === round.leftId)!;
+  const right = fighters.find((f) => f.id === round.rightId)!;
+
+  const statusIcon = (s: string) => s === "exploited" ? "\u2694" : s === "patched" ? "\u2714" : "\u2014";
+  const statusClass = (s: string) => s === "exploited" ? "vuln-exploited" : s === "patched" ? "vuln-patched" : "vuln-none";
+
+  return (
+    <div className="vuln-services-panel">
+      <div className="vuln-author-bar">
+        {author && <PixelPortrait fighter={author} />}
+        <div>
+          <span className="vuln-author-label">Vulnerabilities planted by</span>
+          <strong>{author?.name ?? "Unknown"}</strong>
+          <small>{round.vulnAuthorModel}</small>
+        </div>
+        <span className="vuln-count">{round.vulnerabilities.length} vulns</span>
+      </div>
+      <div className="vuln-table">
+        <div className="vuln-table-head">
+          <span>#</span>
+          <span>Repo</span>
+          <span>Vulnerability</span>
+          <span>Severity</span>
+          <span className="vuln-agent-col">
+            <img className="vuln-agent-icon" src={left.portrait} alt="" />
+            <small>{left.model}</small>
+          </span>
+          <span className="vuln-agent-col">
+            <img className="vuln-agent-icon" src={right.portrait} alt="" />
+            <small>{right.model}</small>
+          </span>
+        </div>
+        {round.vulnerabilities.map((v, i) => (
+          <div className="vuln-table-row" key={v.id}>
+            <b>{String(i + 1).padStart(2, "0")}</b>
+            <span>{v.repo}</span>
+            <span className="vuln-name">{v.name}</span>
+            <em data-severity={v.severity}>{v.severity}</em>
+            <span className={`vuln-status ${statusClass(v.leftStatus)}`}>{statusIcon(v.leftStatus)}</span>
+            <span className={`vuln-status ${statusClass(v.rightStatus)}`}>{statusIcon(v.rightStatus)}</span>
           </div>
         ))}
       </div>
-
-      <div className="live-graph-container">
-        <svg className="live-graph" viewBox={`0 0 ${gW} ${gH}`}>
-          {Array.from({ length: Math.floor(padded / tickStep) + 1 }, (_, i) => {
-            const val = i * tickStep;
-            const y = toY(val);
-            if (y < padT) return null;
-            return (
-              <g key={`yt-${i}`}>
-                <line x1={padL} y1={y} x2={padL + plotW} y2={y} stroke="rgba(244,241,232,0.06)" strokeWidth={0.5} />
-                <text x={padL - 8} y={y + 4} fill="#9a9185" fontSize="11" textAnchor="end" fontFamily="VT323, monospace">{val}</text>
-              </g>
-            );
-          })}
-
-          {Array.from({ length: totalWaves }, (_, i) => {
-            const x = toX(i + 1);
-            const isFuture = i + 1 > currentWave;
-            return (
-              <g key={i}>
-                <line
-                  x1={x} y1={padT} x2={x} y2={padT + plotH}
-                  stroke={isFuture ? "rgba(244,241,232,0.04)" : "rgba(244,241,232,0.1)"}
-                  strokeWidth={0.5}
-                  strokeDasharray={isFuture ? "4 3" : "0"}
-                />
-                <text
-                  x={x} y={gH - 6}
-                  fill={isFuture ? "#5d564f" : "#9a9185"}
-                  fontSize="11"
-                  textAnchor="middle"
-                  fontFamily="VT323, monospace"
-                >
-                  W{i + 1}
-                </text>
-              </g>
-            );
-          })}
-
-          <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke="rgba(244,241,232,0.12)" strokeWidth={0.5} />
-          <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(244,241,232,0.12)" strokeWidth={0.5} />
-
-          {leftPath && <path d={leftPath} fill="none" stroke={leftFighter.palette} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
-          {rightPath && <path d={rightPath} fill="none" stroke={rightFighter.palette} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
-
-          {leftTip && (
-            <>
-              <circle cx={leftTip.x} cy={leftTip.y} r={6} fill={leftFighter.palette} opacity={0.25} />
-              <circle cx={leftTip.x} cy={leftTip.y} r={4} fill={leftFighter.palette} />
-            </>
-          )}
-          {rightTip && (
-            <>
-              <circle cx={rightTip.x} cy={rightTip.y} r={6} fill={rightFighter.palette} opacity={0.25} />
-              <circle cx={rightTip.x} cy={rightTip.y} r={4} fill={rightFighter.palette} />
-            </>
-          )}
-        </svg>
-        <div className="graph-legend">
-          <span style={{ color: leftFighter.palette }}>&#9632; {leftFighter.name}</span>
-          <span style={{ color: rightFighter.palette }}>&#9632; {rightFighter.name}</span>
-        </div>
-      </div>
-
-      <button className="stone-action" onClick={onNext} type="button">
-        Open Benchmark
-      </button>
-    </section>
+    </div>
   );
 }
 
@@ -1292,6 +1422,7 @@ function CompletedRoundScreen({ round, onBack }: { round: RoundData; onBack: () 
           <div>
             <strong>{leftFighter.name}</strong>
             <small>{leftFighter.model}</small>
+            <code className="fighter-ip">{round.leftIp}</code>
           </div>
           <b>{leftFinal}</b>
           <span className="view-trace-link">View Trace</span>
@@ -1301,6 +1432,7 @@ function CompletedRoundScreen({ round, onBack }: { round: RoundData; onBack: () 
           <div>
             <strong>{rightFighter.name}</strong>
             <small>{rightFighter.model}</small>
+            <code className="fighter-ip">{round.rightIp}</code>
           </div>
           <b>{rightFinal}</b>
           <span className="view-trace-link">View Trace</span>
